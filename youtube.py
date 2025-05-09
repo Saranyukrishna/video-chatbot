@@ -15,12 +15,29 @@ st.title("saranyu")
 video_id = st.text_input("Enter YouTube Video ID (e.g. Gfr50f6ZBvo):")
 question = st.text_area("Ask a question based on the transcript:")
 
+proxy_list = [
+    "http://45.91.133.137:8080",
+    "http://185.199.229.156:7492",
+    "http://194.67.91.153:3128",
+    "http://82.165.184.53:80",
+    "http://149.56.96.252:9300"
+]
+
+def get_transcript_with_proxies(video_id):
+    for proxy in proxy_list:
+        try:
+            proxies = {"http": proxy, "https": proxy}
+            return YouTubeTranscriptApi.get_transcript(video_id, languages=["en"], proxies=proxies)
+        except Exception:
+            continue
+    raise Exception("All proxies failed or YouTube blocked access.")
+
 if st.button("Get Answer"):
     if not video_id or not question:
         st.warning("Please provide both video ID and a question.")
     else:
         try:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
+            transcript_list = get_transcript_with_proxies(video_id)
             transcript = " ".join(chunk["text"] for chunk in transcript_list)
 
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
