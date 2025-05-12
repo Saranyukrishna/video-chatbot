@@ -1,19 +1,24 @@
 import streamlit as st
-from pytube import YouTube
+from youtube_transcript_api import YouTubeTranscriptApi
+from urllib.parse import urlparse, parse_qs
 
-st.title("YouTube Transcript Extractor using Pytube")
+st.title("YouTube Transcript Extractor")
 
-video_url = st.text_input("Enter YouTube video URL:")
+video_url = st.text_input("Enter YouTube Video URL:")
+
+def extract_video_id(url):
+    parsed_url = urlparse(url)
+    return parse_qs(parsed_url.query).get("v", [None])[0]
 
 if video_url:
-    try:
-        yt = YouTube(video_url)
-        caption = yt.captions.get_by_language_code('en')
-        if caption:
-            transcript = caption.generate_srt_captions()
-            st.subheader("Transcript (SRT Format):")
-            st.text(transcript)
-        else:
-            st.error("No English captions available for this video.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+    video_id = extract_video_id(video_url)
+    if video_id:
+        try:
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+            full_text = "\n".join([entry["text"] for entry in transcript])
+            st.subheader("Transcript:")
+            st.text(full_text)
+        except Exception as e:
+            st.error(f"Transcript not available: {e}")
+    else:
+        st.error("Invalid YouTube URL format.")
