@@ -20,4 +20,4 @@ COPY . /app/
 EXPOSE 8501
 
 # Command to run your app using Streamlit
-CMD ["streamlit", "run", "app.py"]
+CMD ["streamlit", "run", "youtube.py"]
