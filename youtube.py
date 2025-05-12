@@ -1,54 +1,71 @@
 import streamlit as st
-import requests
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
+from youtubesearchpython import VideosSearch
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_groq import ChatGroq
+from langchain_core.prompts import PromptTemplate
+from dotenv import load_dotenv
+import os
 
-# Vimeo API token (replace this with your token)
-ACCESS_TOKEN = "4d5aaca6ab88028a924d29c68d87a46b"
+load_dotenv()
 
-# Function to get the transcript (captions) for a given video ID
-def get_vimeo_transcript(video_id: str):
-    url = f"https://api.vimeo.com/videos/{video_id}/texttracks"
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}"
-    }
-    
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code == 200:
-        texttracks = response.json()
-        if texttracks["data"]:
-            # Assuming English subtitles, you can modify this if needed
-            for track in texttracks["data"]:
-                if track["language"] == "en":
-                    caption_url = track["link"]
-                    # Fetch the caption file (subtitles)
-                    caption_response = requests.get(caption_url)
-                    if caption_response.status_code == 200:
-                        return caption_response.text
-                    else:
-                        return "Error: Unable to fetch captions file."
-        else:
-            return "Error: No captions available for this video."
+st.title("Ask Questions from YouTube Video Transcript")
+
+query = st.text_input("Enter YouTube video search query:")
+question = st.text_area("Ask a question based on the transcript:")
+
+if st.button("Search and Answer"):
+    if not query or not question:
+        st.warning("Please provide both a search query and a question.")
     else:
-        return f"Error: {response.status_code} - {response.text}"
+        try:
+            search = VideosSearch(query, limit=1)
+            result = search.result()
+            video_id = result["result"][0]["id"]
+            video_title = result["result"][0]["title"]
 
-# Streamlit UI
-st.title("Vimeo Transcript Extractor")
+            st.write(f"**Video Found:** {video_title}")
+            st.video(f"https://www.youtube.com/watch?v={video_id}")
 
-video_url = st.text_input("Enter Vimeo video URL:")
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
+            transcript = " ".join(chunk["text"] for chunk in transcript_list)
 
-if video_url:
-    # Extract the video ID from the Vimeo URL
-    if "vimeo.com/" in video_url:
-        video_id = video_url.split("vimeo.com/")[-1]
-    else:
-        st.error("Invalid Vimeo URL format.")
-        st.stop()
-    
-    if st.button("Get Transcript"):
-        with st.spinner("Fetching transcript..."):
-            transcript = get_vimeo_transcript(video_id)
-            if transcript.startswith("Error"):
-                st.error(transcript)
-            else:
-                st.success("Transcript fetched successfully!")
-                st.text_area("Transcript:", transcript, height=400)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            chunks = splitter.create_documents([transcript])
+
+            embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            vector_store = FAISS.from_documents(chunks, embeddings)
+            retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+
+            retrieved_docs = retriever.invoke(question)
+            context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+
+            prompt = PromptTemplate(
+                template="""
+                You are a helpful assistant.
+                Answer ONLY from the provided transcript context.
+                If the context is insufficient, just say you don't know.
+
+                {context}
+                Question: {question}
+                """,
+                input_variables=["context", "question"]
+            )
+
+            llm = ChatGroq(
+                model="llama3-70b-8192",
+                temperature=1.5
+            )
+
+            final_prompt = prompt.invoke({"context": context_text, "question": question})
+            answer = llm.invoke(final_prompt)
+
+            st.subheader("Answer:")
+            st.write(answer.content)
+
+        except TranscriptsDisabled:
+            st.error("No captions available for this video.")
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
