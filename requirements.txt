@@ -12,3 +12,4 @@ sentence-transformers>=2.2.0
 huggingface-hub>=0.12.1
 yt-dlp>=2023.4.9
 torch>=2.0.0
+pytube==15.0.0
