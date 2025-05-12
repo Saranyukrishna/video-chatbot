@@ -1,15 +1,2 @@
-streamlit>=1.18.0
-youtube-transcript-api>=0.4.1
-langchain-community>=0.2.0
-langchain-openai>=0.0.2
-langchain-huggingface>=0.0.2
-langchain-groq>=0.1.0
-faiss-cpu>=1.7.1
-tiktoken>=0.3.0
-python-dotenv>=0.21.1
-openai-whisper>=20230314
-sentence-transformers>=2.2.0
-huggingface-hub>=0.12.1
-yt-dlp>=2023.4.9
-torch>=2.0.0
-pytube==15.0.0
+streamlit==1.35.0
+youtube-transcript-api==0.6.1
